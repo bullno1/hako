@@ -172,9 +172,13 @@ sandbox_entry(void* arg)
 		quit(EXIT_FAILURE);
 	}
 
-	for(unsigned int i = 0; i < sandbox_cfg->num_mounts; ++i)
+	struct bindmnt_s* mount_cfg;
+	unsigned int i;
+	for(
+		i = 0, mount_cfg = &sandbox_cfg->mounts[i];
+		mount_cfg->sandbox_path != NULL;
+		++i, mount_cfg = &sandbox_cfg->mounts[i])
 	{
-		struct bindmnt_s* mount_cfg = &sandbox_cfg->mounts[i];
 		char* new_host_path = NULL;
 
 		if(asprintf(
@@ -276,12 +280,12 @@ main(int argc, char* argv[])
 
 	int option;
 	char* child_stack = NULL;
+	unsigned int num_mounts = 0;
 	struct optparse options;
 	struct sandbox_cfg_s sandbox_cfg = {
-		.command = malloc(argc * sizeof(const char*)),
-		.mounts = malloc(argc / 2 * sizeof(struct bindmnt_s)),
+		.command = calloc(argc, sizeof(const char*)),
+		.mounts = calloc(argc / 2, sizeof(struct bindmnt_s)),
 		.pdeath_sig = SIGKILL,
-		.num_mounts = 0,
 		.uid = (uid_t)-1,
 		.gid = (uid_t)-1,
 	};
@@ -297,7 +301,7 @@ main(int argc, char* argv[])
 				break;
 			case 'm':
 				if(!parse_mount(
-					options.optarg, &sandbox_cfg.mounts[sandbox_cfg.num_mounts++]
+					options.optarg, &sandbox_cfg.mounts[num_mounts++]
 				))
 				{
 					fprintf(stderr, "boxed-run: invalid mount: %s\n", options.optarg);
@@ -331,7 +335,6 @@ main(int argc, char* argv[])
 			sandbox_cfg.command[command_argc++] = (char*)arg;
 		}
 	}
-	sandbox_cfg.command[command_argc] = NULL;
 
 	if(sandbox_cfg.sandbox_dir == NULL)
 	{
@@ -374,7 +377,7 @@ main(int argc, char* argv[])
 	quit(WIFEXITED(child_ret) ? WEXITSTATUS(child_ret) : EXIT_FAILURE);
 
 quit:
-	for(size_t i = 0; i < sandbox_cfg.num_mounts; ++i)
+	for(size_t i = 0; i < num_mounts; ++i)
 	{
 		free(sandbox_cfg.mounts[i].host_path);
 		free(sandbox_cfg.mounts[i].sandbox_path);
