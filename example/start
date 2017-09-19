@@ -4,7 +4,12 @@ DIRNAME="$(readlink -f $(dirname $0))"
 SANDBOXDIR="${DIRNAME}/sandbox"
 HAKO_RUN="$(dirname ${DIRNAME})/hako-run"
 
+# Empty directories can't be checked into git
+mkdir -p ${SANDBOXDIR}/tmp ${SANDBOXDIR}/.hako
+
 exec $HAKO_RUN \
 	--mount $(which busybox):/bin/busybox:ro \
+	--mount /tmp:/tmp \
+	--readonly \
 	${SANDBOXDIR} \
 	-- "$@"

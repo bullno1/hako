@@ -124,6 +124,12 @@ drop_privileges(uid_t uid, gid_t gid)
 	return true;
 }
 
+static bool
+make_mount_readonly(const char* path)
+{
+	return mount(NULL, path, NULL, MS_REMOUNT | MS_BIND | MS_RDONLY, NULL) == 0;
+}
+
 static int
 sandbox_entry(void* arg)
 {
@@ -150,6 +156,12 @@ sandbox_entry(void* arg)
 	) == -1)
 	{
 		perror("Could not turn sandbox into a mountpoint");
+		quit(EXIT_FAILURE);
+	}
+
+	if(sandbox_cfg->readonly && !make_mount_readonly(sandbox_cfg->sandbox_dir))
+	{
+		perror("Could not make sandbox read-only");
 		quit(EXIT_FAILURE);
 	}
 
@@ -204,10 +216,7 @@ sandbox_entry(void* arg)
 			quit(EXIT_FAILURE);
 		}
 
-		if(mount_cfg->readonly && mount(
-			NULL, mount_cfg->sandbox_path, NULL,
-			MS_REMOUNT | MS_BIND | MS_RDONLY, NULL
-		) == -1)
+		if(mount_cfg->readonly && !make_mount_readonly(mount_cfg->sandbox_path))
 		{
 			fprintf(
 				stderr, "Could not make %s read-only: %s\n",
@@ -257,7 +266,7 @@ main(int argc, char* argv[])
 	struct optparse_long opts[] = {
 		{"help", 'h', OPTPARSE_NONE},
 		{"mount", 'm', OPTPARSE_REQUIRED},
-		{"read-only", 'r', OPTPARSE_OPTIONAL},
+		{"readonly", 'r', OPTPARSE_OPTIONAL},
 		{"user", 'u', OPTPARSE_REQUIRED},
 		{"group", 'g', OPTPARSE_REQUIRED},
 		{"chdir", 'c', OPTPARSE_REQUIRED},
@@ -309,11 +318,24 @@ main(int argc, char* argv[])
 					quit(EXIT_FAILURE);
 				}
 				break;
-			/*case 'r':*/
-				/*if(options.optarg == NULL)*/
-				/*{*/
-					/*sandbox_cfg*/
-				/*}*/
+			case 'r':
+				if(options.optarg == NULL)
+				{
+					sandbox_cfg.readonly = true;
+				}
+				else if(strcmp(options.optarg, "true") == 0)
+				{
+					sandbox_cfg.readonly = true;
+				}
+				else if(strcmp(options.optarg, "false") == 0)
+				{
+					sandbox_cfg.readonly = false;
+				}
+				else
+				{
+					fprintf(stderr, PROG_NAME ": invalid read-only options: %s\n", options.optarg);
+				}
+				break;
 			case 'c':
 				sandbox_cfg.work_dir = options.optarg;
 				break;
