@@ -21,7 +21,8 @@
 #define OPTPARSE_HELP_API static
 #include "optparse-help.h"
 
-#define BOXED_DIR ".boxed"
+#define HAKO_DIR ".hako"
+#define PROG_NAME "hako-run"
 #define quit(code) exit_code = code; goto quit;
 
 struct bindmnt_s
@@ -35,7 +36,7 @@ struct sandbox_cfg_s
 {
 	const char* sandbox_dir;
 	struct bindmnt_s* mounts;
-	unsigned int num_mounts;
+	bool readonly;
 	uid_t uid;
 	gid_t gid;
 	unsigned long pdeath_sig;
@@ -153,7 +154,7 @@ sandbox_entry(void* arg)
 	}
 
 	if(asprintf(
-		&old_root_path, "%s/" BOXED_DIR, sandbox_cfg->sandbox_dir
+		&old_root_path, "%s/" HAKO_DIR, sandbox_cfg->sandbox_dir
 	) == -1)
 	{
 		perror(NULL);
@@ -182,7 +183,7 @@ sandbox_entry(void* arg)
 		char* new_host_path = NULL;
 
 		if(asprintf(
-			&new_host_path, BOXED_DIR "/%s", mount_cfg->host_path
+			&new_host_path, HAKO_DIR "/%s", mount_cfg->host_path
 		) == -1)
 		{
 			perror(NULL);
@@ -216,7 +217,7 @@ sandbox_entry(void* arg)
 		}
 	}
 
-	if(umount2(BOXED_DIR, MNT_DETACH) == -1)
+	if(umount2(HAKO_DIR, MNT_DETACH) == -1)
 	{
 		perror("Could not unmount old root");
 		quit(EXIT_FAILURE);
@@ -276,7 +277,7 @@ main(int argc, char* argv[])
 		"SIGNAL", "Signal to kill sandbox (default: SIGKILL)",
 	};
 
-	const char* usage = "Usage: boxed-run [options] <target> [--] [command] [args]";
+	const char* usage = "Usage: " PROG_NAME " [options] <target> [--] [command] [args]";
 
 	int option;
 	char* child_stack = NULL;
@@ -304,15 +305,20 @@ main(int argc, char* argv[])
 					options.optarg, &sandbox_cfg.mounts[num_mounts++]
 				))
 				{
-					fprintf(stderr, "boxed-run: invalid mount: %s\n", options.optarg);
+					fprintf(stderr, PROG_NAME ": invalid mount: %s\n", options.optarg);
 					quit(EXIT_FAILURE);
 				}
 				break;
+			/*case 'r':*/
+				/*if(options.optarg == NULL)*/
+				/*{*/
+					/*sandbox_cfg*/
+				/*}*/
 			case 'c':
 				sandbox_cfg.work_dir = options.optarg;
 				break;
 			case '?':
-				fprintf(stderr, "boxed-run: %s\n", options.errmsg);
+				fprintf(stderr, PROG_NAME ": %s\n", options.errmsg);
 				quit(EXIT_FAILURE);
 				break;
 			default:
@@ -338,7 +344,7 @@ main(int argc, char* argv[])
 
 	if(sandbox_cfg.sandbox_dir == NULL)
 	{
-		fprintf(stderr, "boxed-run: must provide sandbox dir\n");
+		fprintf(stderr, PROG_NAME ": must provide sandbox dir\n");
 		quit(EXIT_FAILURE);
 	}
 
