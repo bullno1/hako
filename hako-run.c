@@ -102,7 +102,6 @@ quit:
 static bool
 drop_privileges(uid_t uid, gid_t gid)
 {
-
 	if(gid != (gid_t)-1 && setgid(gid) == -1)
 	{
 		perror("setgid() failed");
