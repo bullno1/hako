@@ -310,7 +310,7 @@ main(int argc, char* argv[])
 		.env = calloc(argc / 2, sizeof(const char*)),
 		.pdeath_sig = SIGKILL,
 		.uid = (uid_t)-1,
-		.gid = (uid_t)-1,
+		.gid = (gid_t)-1,
 	};
 	optparse_init(&options, argv);
 
