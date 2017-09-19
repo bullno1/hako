@@ -40,6 +40,7 @@ struct sandbox_cfg_s
 	bool readonly;
 	uid_t uid;
 	gid_t gid;
+	bool lock_privs;
 	unsigned long pdeath_sig;
 	const char* work_dir;
 	char** env;
@@ -238,6 +239,12 @@ sandbox_entry(void* arg)
 		quit(EXIT_FAILURE);
 	}
 
+	if(sandbox_cfg->lock_privs && prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) == -1)
+	{
+		perror("Could not lock privileges");
+		quit(EXIT_FAILURE);
+	}
+
 	if(sandbox_cfg->work_dir != NULL && chdir(sandbox_cfg->work_dir) == -1)
 	{
 		perror("chdir() failed");
@@ -277,6 +284,7 @@ main(int argc, char* argv[])
 		{"read-only", 'R', OPTPARSE_NONE},
 		{"user", 'u', OPTPARSE_REQUIRED},
 		{"group", 'g', OPTPARSE_REQUIRED},
+		{"lock-privs", 'L', OPTPARSE_NONE},
 		{"chdir", 'c', OPTPARSE_REQUIRED},
 		{"env", 'e', OPTPARSE_REQUIRED},
 		{"pid-file", 'p', OPTPARSE_REQUIRED},
@@ -290,6 +298,7 @@ main(int argc, char* argv[])
 		NULL, "Make sandbox filesystem read-only",
 		"USER", "Run as this user",
 		"GROUP", "Run as this group",
+		NULL, "Prevent sandbox from gaining more privileges",
 		"DIR", "Change to this directory inside sandbox",
 		"ENV=VAL", "Set environment variable inside sandbox",
 		"FILE", "Write pid of sandbox to this file",
@@ -333,6 +342,9 @@ main(int argc, char* argv[])
 				break;
 			case 'R':
 				sandbox_cfg.readonly = true;
+				break;
+			case 'L':
+				sandbox_cfg.lock_privs = true;
 				break;
 			case 'u':
 				if(strtonum(options.optarg, &num) && num >= 0)
