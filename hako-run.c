@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <sched.h>
 #include <grp.h>
+#include <pwd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -103,6 +104,12 @@ quit:
 static bool
 drop_privileges(uid_t uid, gid_t gid)
 {
+	if((uid != (uid_t)-1 || gid != (gid_t)-1) && setgroups(0, NULL) == -1)
+	{
+		perror("setgroups(0, NULL) failed");
+		return false;
+	}
+
 	if(gid != (gid_t)-1 && setgid(gid) == -1)
 	{
 		perror("setgid() failed");
@@ -112,12 +119,6 @@ drop_privileges(uid_t uid, gid_t gid)
 	if(uid != (uid_t)-1 && setuid(uid) == -1)
 	{
 		perror("setuid() failed");
-		return false;
-	}
-
-	if((uid != (uid_t)-1 || gid != (gid_t)-1) && prctl(PR_SET_NO_NEW_PRIVS, 1) == -1)
-	{
-		perror("prctl(PR_SET_NO_NEW_PRIVS, 1) failed");
 		return false;
 	}
 
@@ -255,6 +256,14 @@ quit:
 	return exit_code;
 }
 
+static bool
+strtonum(const char* str, long* number)
+{
+	char* end;
+	*number = strtol(str, &end, 10);
+	return *end == '\0';
+}
+
 int
 main(int argc, char* argv[])
 {
@@ -279,8 +288,8 @@ main(int argc, char* argv[])
 		NULL, "Print this message",
 		"HOST:SANDBOX[:ro/rw]", "Bind mount a file to sandbox",
 		"true/false", "Make sandbox filesystem read-only",
-		"USER", "Change to this user",
-		"GROUP", "Change to this group after creating sandbox",
+		"USER", "Run as this user",
+		"GROUP", "Run as this group",
 		"DIR", "Change to this directory inside sandbox",
 		"ENV=VAL", "Set environment variable inside sandbox",
 		"FILE", "Write pid of sandbox to this file",
@@ -290,6 +299,7 @@ main(int argc, char* argv[])
 	const char* usage = "Usage: " PROG_NAME " [options] <target> [--] [command] [args]";
 
 	int option;
+	long num;
 	char* child_stack = NULL;
 	unsigned int num_mounts = 0;
 	unsigned int num_envars = 0;
@@ -337,6 +347,44 @@ main(int argc, char* argv[])
 				else
 				{
 					fprintf(stderr, PROG_NAME ": invalid read-only options: %s\n", options.optarg);
+				}
+				break;
+			case 'u':
+				if(strtonum(options.optarg, &num) && num >= 0)
+				{
+					sandbox_cfg.uid = (uid_t)num;
+				}
+				else
+				{
+					struct passwd* pwd = getpwnam(options.optarg);
+					if(pwd != NULL)
+					{
+						sandbox_cfg.uid = pwd->pw_uid;
+					}
+					else
+					{
+						fprintf(stderr, PROG_NAME ": invalid user: %s\n", options.optarg);
+						quit(EXIT_FAILURE);
+					}
+				}
+				break;
+			case 'g':
+				if(strtonum(options.optarg, &num) && num >= 0)
+				{
+					sandbox_cfg.gid = (gid_t)num;
+				}
+				else
+				{
+					struct group* grp = getgrnam(options.optarg);
+					if(grp != NULL)
+					{
+						sandbox_cfg.gid = grp->gr_gid;
+					}
+					else
+					{
+						fprintf(stderr, PROG_NAME ": invalid group: %s\n", options.optarg);
+						quit(EXIT_FAILURE);
+					}
 				}
 				break;
 			case 'e':
