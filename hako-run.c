@@ -41,6 +41,7 @@ struct sandbox_cfg_s
 	gid_t gid;
 	unsigned long pdeath_sig;
 	const char* work_dir;
+	char** env;
 	char** command;
 };
 
@@ -242,8 +243,7 @@ sandbox_entry(void* arg)
 		quit(EXIT_FAILURE);
 	}
 
-	char* const envp[] = {0};
-	if(execve(sandbox_cfg->command[0], sandbox_cfg->command, envp) == -1)
+	if(execve(sandbox_cfg->command[0], sandbox_cfg->command, sandbox_cfg->env) == -1)
 	{
 		perror("execve() failed");
 		quit(EXIT_FAILURE);
@@ -269,6 +269,7 @@ main(int argc, char* argv[])
 		{"user", 'u', OPTPARSE_REQUIRED},
 		{"group", 'g', OPTPARSE_REQUIRED},
 		{"chdir", 'c', OPTPARSE_REQUIRED},
+		{"env", 'e', OPTPARSE_REQUIRED},
 		{"pid-file", 'p', OPTPARSE_REQUIRED},
 		{"kill-signal", 's', OPTPARSE_REQUIRED},
 		{0}
@@ -281,6 +282,7 @@ main(int argc, char* argv[])
 		"USER", "Change to this user",
 		"GROUP", "Change to this group after creating sandbox",
 		"DIR", "Change to this directory inside sandbox",
+		"ENV=VAL", "Set environment variable inside sandbox",
 		"FILE", "Write pid of sandbox to this file",
 		"SIGNAL", "Signal to kill sandbox (default: SIGKILL)",
 	};
@@ -290,10 +292,12 @@ main(int argc, char* argv[])
 	int option;
 	char* child_stack = NULL;
 	unsigned int num_mounts = 0;
+	unsigned int num_envars = 0;
 	struct optparse options;
 	struct sandbox_cfg_s sandbox_cfg = {
 		.command = calloc(argc, sizeof(const char*)),
 		.mounts = calloc(argc / 2, sizeof(struct bindmnt_s)),
+		.env = calloc(argc / 2, sizeof(const char*)),
 		.pdeath_sig = SIGKILL,
 		.uid = (uid_t)-1,
 		.gid = (uid_t)-1,
@@ -334,6 +338,9 @@ main(int argc, char* argv[])
 				{
 					fprintf(stderr, PROG_NAME ": invalid read-only options: %s\n", options.optarg);
 				}
+				break;
+			case 'e':
+				sandbox_cfg.env[num_envars++] = options.optarg;
 				break;
 			case 'c':
 				sandbox_cfg.work_dir = options.optarg;
@@ -411,6 +418,7 @@ quit:
 	}
 	free(sandbox_cfg.mounts);
 	free(sandbox_cfg.command);
+	free(sandbox_cfg.env);
 	free(child_stack);
 
 	return exit_code;
