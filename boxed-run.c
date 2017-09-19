@@ -124,7 +124,7 @@ drop_privileges(uid_t uid, gid_t gid)
 }
 
 static int
-child_fn(void* arg)
+sandbox_entry(void* arg)
 {
 	int exit_code = EXIT_SUCCESS;
 
@@ -353,7 +353,7 @@ main(int argc, char* argv[])
 		| CLONE_NEWPID | CLONE_NEWIPC | CLONE_NEWNS | CLONE_NEWUTS
 		| CLONE_NEWNET;
 	pid_t child_pid = clone(
-		child_fn, child_stack + stack_size, clone_flags, &sandbox_cfg
+		sandbox_entry, child_stack + stack_size, clone_flags, &sandbox_cfg
 	);
 	if(child_pid == -1)
 	{
