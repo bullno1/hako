@@ -274,7 +274,7 @@ main(int argc, char* argv[])
 	struct optparse_long opts[] = {
 		{"help", 'h', OPTPARSE_NONE},
 		{"mount", 'm', OPTPARSE_REQUIRED},
-		{"readonly", 'r', OPTPARSE_OPTIONAL},
+		{"read-only", 'R', OPTPARSE_NONE},
 		{"user", 'u', OPTPARSE_REQUIRED},
 		{"group", 'g', OPTPARSE_REQUIRED},
 		{"chdir", 'c', OPTPARSE_REQUIRED},
@@ -287,7 +287,7 @@ main(int argc, char* argv[])
 	const char* help[] = {
 		NULL, "Print this message",
 		"HOST:SANDBOX[:ro/rw]", "Bind mount a file to sandbox",
-		"true/false", "Make sandbox filesystem read-only",
+		NULL, "Make sandbox filesystem read-only",
 		"USER", "Run as this user",
 		"GROUP", "Run as this group",
 		"DIR", "Change to this directory inside sandbox",
@@ -331,23 +331,8 @@ main(int argc, char* argv[])
 					quit(EXIT_FAILURE);
 				}
 				break;
-			case 'r':
-				if(options.optarg == NULL)
-				{
-					sandbox_cfg.readonly = true;
-				}
-				else if(strcmp(options.optarg, "true") == 0)
-				{
-					sandbox_cfg.readonly = true;
-				}
-				else if(strcmp(options.optarg, "false") == 0)
-				{
-					sandbox_cfg.readonly = false;
-				}
-				else
-				{
-					fprintf(stderr, PROG_NAME ": invalid read-only options: %s\n", options.optarg);
-				}
+			case 'R':
+				sandbox_cfg.readonly = true;
 				break;
 			case 'u':
 				if(strtonum(options.optarg, &num) && num >= 0)

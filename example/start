@@ -10,6 +10,6 @@ mkdir -p ${SANDBOXDIR}/tmp ${SANDBOXDIR}/.hako
 exec $HAKO_RUN \
 	--mount $(which busybox):/bin/busybox:ro \
 	--mount /tmp:/tmp \
-	--readonly \
+	--read-only \
 	${SANDBOXDIR} \
 	-- "$@"
