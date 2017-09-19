@@ -23,7 +23,7 @@ optparse_help_opt_width_(const struct optparse_long opt, const char* param)
     return 0
         + 2 // "-o"
         + (opt.longname ? 3 + strlen(opt.longname) : 0) // ",--option",
-        + (param ? 3 + strlen(param) : 0); //" [param]"
+        + (param ? (opt.argtype == OPTPARSE_REQUIRED ? 1 : 3) + strlen(param) : 0); //"[=param]" or " param"
 }
 
 void
@@ -65,7 +65,7 @@ optparse_help(
                 printf("[=%s]", param);
                 break;
             case OPTPARSE_REQUIRED:
-                printf(" <%s>", param);
+                printf(" %s", param);
                 break;
         }
 		printf("%*s", max_width + 4 - optparse_help_opt_width_(opt, param), "");
