@@ -229,9 +229,10 @@ sandbox_entry(void* arg)
 		quit(EXIT_FAILURE);
 	}
 
-	if(execvp(sandbox_cfg->command[0], sandbox_cfg->command) == -1)
+	char* const envp[] = {0};
+	if(execve(sandbox_cfg->command[0], sandbox_cfg->command, envp) == -1)
 	{
-		perror("execvp() failed");
+		perror("execve() failed");
 		quit(EXIT_FAILURE);
 	}
 
