@@ -1,6 +1,8 @@
 #define _GNU_SOURCE
+#include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <inttypes.h>
 #include <ctype.h>
 #include <signal.h>
 #include <errno.h>
@@ -307,6 +309,7 @@ main(int argc, char* argv[])
 	int option;
 	long num;
 	char* child_stack = NULL;
+	const char* pid_file = NULL;
 	unsigned int num_mounts = 0;
 	unsigned int num_envars = 0;
 	struct optparse options;
@@ -386,6 +389,9 @@ main(int argc, char* argv[])
 			case 'c':
 				sandbox_cfg.work_dir = options.optarg;
 				break;
+			case 'p':
+				pid_file = options.optarg;
+				break;
 			case '?':
 				fprintf(stderr, PROG_NAME ": %s\n", options.errmsg);
 				quit(EXIT_FAILURE);
@@ -443,6 +449,24 @@ main(int argc, char* argv[])
 	if(!drop_privileges(sandbox_cfg.uid, sandbox_cfg.gid))
 	{
 		quit(EXIT_FAILURE);
+	}
+
+	if(pid_file != NULL)
+	{
+		FILE* file = fopen(pid_file, "w");
+		if(file == NULL)
+		{
+			perror("Could not open pid file for writing");
+			quit(EXIT_FAILURE);
+		}
+
+		bool written = fprintf(file, "%" PRIdMAX, (intmax_t)child_pid) > 0;
+		bool closed = fclose(file) == 0;
+		if(!(written && closed))
+		{
+			fprintf(stderr, "Could not write pid to file\n");
+			quit(EXIT_FAILURE);
+		}
 	}
 
 	int child_ret;
