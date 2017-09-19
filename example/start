@@ -1,0 +1,10 @@
+#!/bin/sh -e
+
+DIRNAME="$(readlink -f $(dirname $0))"
+SANDBOXDIR="${DIRNAME}/sandbox"
+HAKO_RUN="$(dirname ${DIRNAME})/hako-run"
+
+exec $HAKO_RUN \
+	--mount $(which busybox):/bin/busybox:ro \
+	${SANDBOXDIR} \
+	-- "$@"
