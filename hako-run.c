@@ -41,7 +41,6 @@ struct sandbox_cfg_s
 	uid_t uid;
 	gid_t gid;
 	bool lock_privs;
-	unsigned long pdeath_sig;
 	const char* work_dir;
 	char** env;
 	char** command;
@@ -140,7 +139,7 @@ sandbox_entry(void* arg)
 	const struct sandbox_cfg_s* sandbox_cfg = arg;
 	char* old_root_path = NULL;
 
-	if(prctl(PR_SET_PDEATHSIG, sandbox_cfg->pdeath_sig) == -1)
+	if(prctl(PR_SET_PDEATHSIG, SIGHUP) == -1)
 	{
 		perror("Could not set parent death signal");
 		quit(EXIT_FAILURE);
@@ -288,7 +287,6 @@ main(int argc, char* argv[])
 		{"chdir", 'c', OPTPARSE_REQUIRED},
 		{"env", 'e', OPTPARSE_REQUIRED},
 		{"pid-file", 'p', OPTPARSE_REQUIRED},
-		{"kill-signal", 's', OPTPARSE_REQUIRED},
 		{0}
 	};
 
@@ -302,7 +300,6 @@ main(int argc, char* argv[])
 		"DIR", "Change to this directory inside sandbox",
 		"ENV=VAL", "Set environment variable inside sandbox",
 		"FILE", "Write pid of sandbox to this file",
-		"SIGNAL", "Signal to kill sandbox (default: SIGKILL)",
 	};
 
 	const char* usage = "Usage: " PROG_NAME " [options] <target> [--] [command] [args]";
@@ -317,7 +314,6 @@ main(int argc, char* argv[])
 		.command = calloc(argc, sizeof(const char*)),
 		.mounts = calloc(argc / 2, sizeof(struct bindmnt_s)),
 		.env = calloc(argc / 2, sizeof(const char*)),
-		.pdeath_sig = SIGKILL,
 		.uid = (uid_t)-1,
 		.gid = (gid_t)-1,
 	};
