@@ -57,13 +57,13 @@ enter_sandbox(const char* pid)
 		if(ns < 0 && errno != ENOENT)
 		{
 			fprintf(stderr, "Could not open %s: %s\n", dirent->d_name, strerror(errno));
-			quit(EXIT_FAILURE);
+			quit(false);
 		}
 
 		if(ns > 0 && setns(ns, 0) == -1)
 		{
 			fprintf(stderr, "Could not setns %s: %s\n", dirent->d_name, strerror(errno));
-			quit(EXIT_FAILURE);
+			quit(false);
 		}
 
 		close(ns);
