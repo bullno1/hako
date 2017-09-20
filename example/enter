@@ -1,0 +1,12 @@
+#!/bin/sh
+
+DIRNAME="$(readlink -f $(dirname $0))"
+SANDBOXDIR="${DIRNAME}/sandbox"
+HAKO_ENTER="$(dirname ${DIRNAME})/hako-enter"
+
+exec $HAKO_ENTER \
+	--user ${SUDO_UID:-$(id -u)} \
+	--group ${SUDO_GID:-$(id -g)} \
+	--lock-privs \
+	$(cat /tmp/hako.pid) \
+	-- "$@"

@@ -12,8 +12,10 @@ exec $HAKO_RUN \
 	--mount /etc/passwd:/etc/passwd:ro \
 	--mount /etc/group:/etc/group:ro \
 	--mount /tmp:/tmp \
+	--pid-file /tmp/hako.pid \
 	--user ${SUDO_UID:-$(id -u)} \
 	--group ${SUDO_GID:-$(id -g)} \
+	--lock-privs \
 	--read-only \
 	${SANDBOXDIR} \
 	-- "$@"
