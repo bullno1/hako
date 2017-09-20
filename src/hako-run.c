@@ -344,7 +344,7 @@ main(int argc, char* argv[])
 	sigprocmask(SIG_BLOCK, &set, NULL);
 	for(;;)
 	{
-		int sig, child_ret;
+		int sig, status;
 		sigwait(&set, &sig);
 		switch(sig)
 		{
@@ -356,14 +356,16 @@ main(int argc, char* argv[])
 				// be handled (and ignored) by child.
 				kill(child_pid, SIGKILL);
 				quit(128 + sig);
+				break;
 			case SIGCHLD:
-				if(waitpid(child_pid, &child_ret, WNOHANG) > 0)
+				if(waitpid(child_pid, &status, WNOHANG) > 0)
 				{
 					quit(
-						WIFEXITED(child_ret) ?
-						WEXITSTATUS(child_ret) : (128 + WTERMSIG(child_ret))
+						WIFEXITED(status) ?
+						WEXITSTATUS(status) : (128 + WTERMSIG(status))
 					);
 				}
+				break;
 		}
 	}
 
