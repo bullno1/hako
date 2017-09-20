@@ -339,11 +339,33 @@ main(int argc, char* argv[])
 		}
 	}
 
-	int child_ret;
-	errno = 0;
-	while(waitpid(child_pid, &child_ret, 0) != child_pid && errno == EINTR) { }
-
-	quit(WIFEXITED(child_ret) ? WEXITSTATUS(child_ret) : EXIT_FAILURE);
+	sigset_t set;
+	sigfillset(&set);
+	sigprocmask(SIG_BLOCK, &set, NULL);
+	for(;;)
+	{
+		int sig, child_ret;
+		sigwait(&set, &sig);
+		switch(sig)
+		{
+			case SIGINT:
+			case SIGTERM:
+			case SIGHUP:
+			case SIGQUIT:
+				// Kill child manualy because SIGKILL from PR_SET_PDEATHSIG can
+				// be handled (and ignored) by child.
+				kill(child_pid, SIGKILL);
+				quit(128 + sig);
+			case SIGCHLD:
+				if(waitpid(child_pid, &child_ret, WNOHANG) > 0)
+				{
+					quit(
+						WIFEXITED(child_ret) ?
+						WEXITSTATUS(child_ret) : (128 + WTERMSIG(child_ret))
+					);
+				}
+		}
+	}
 
 quit:
 	for(size_t i = 0; i < num_mounts; ++i)
