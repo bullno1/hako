@@ -2,5 +2,8 @@ CFLAGS += -Wall -Wextra -pedantic -Wno-missing-field-initializers -Werror -std=c
 
 all: hako-run hako-enter
 
+clean:
+	rm hako-*
+
 hako-%: src/hako-%.c
 	$(CC) $(CFLAGS) -o $@ $<
