@@ -54,19 +54,34 @@ enter_sandbox(const char* pid)
 		if(dirent->d_type != DT_LNK) { continue; }
 
 		int ns = open(dirent->d_name, O_RDONLY);
-		if(ns < 0 && errno != ENOENT)
+		if(ns < 0)
 		{
-			fprintf(stderr, "Could not open %s: %s\n", dirent->d_name, strerror(errno));
-			quit(false);
+			if(errno == ENOENT) // no such namespace
+			{
+				continue;
+			}
+			else
+			{
+				fprintf(
+					stderr, "Could not open %s: %s\n",
+					dirent->d_name, strerror(errno)
+				);
+				quit(false);
+			}
 		}
-
-		if(ns > 0 && setns(ns, 0) == -1)
+		else
 		{
-			fprintf(stderr, "Could not setns %s: %s\n", dirent->d_name, strerror(errno));
-			quit(false);
+			int setns_result = setns(ns, 0);
+			close(ns);
+			if(setns_result == -1)
+			{
+				fprintf(
+					stderr, "Could not setns %s: %s\n",
+					dirent->d_name, strerror(errno)
+				);
+				quit(false);
+			}
 		}
-
-		close(ns);
 	}
 
 quit:
