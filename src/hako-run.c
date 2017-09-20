@@ -1,20 +1,12 @@
 #define _GNU_SOURCE
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdbool.h>
 #include <inttypes.h>
 #include <ctype.h>
 #include <signal.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <unistd.h>
 #include <sched.h>
-#include <grp.h>
-#include <pwd.h>
 #include <sys/stat.h>
-#include <sys/types.h>
 #include <sys/wait.h>
-#include <sys/prctl.h>
 #include <sys/mount.h>
 #include <sys/syscall.h>
 #define OPTPARSE_IMPLEMENTATION
@@ -23,6 +15,7 @@
 #define OPTPARSE_HELP_IMPLEMENTATION
 #define OPTPARSE_HELP_API static
 #include "optparse-help.h"
+#include "hako-common.h"
 
 #define HAKO_DIR ".hako"
 #define PROG_NAME "hako-run"
@@ -40,12 +33,7 @@ struct sandbox_cfg_s
 	const char* sandbox_dir;
 	struct bindmnt_s* mounts;
 	bool readonly;
-	uid_t uid;
-	gid_t gid;
-	bool lock_privs;
-	const char* work_dir;
-	char** env;
-	char** command;
+	struct run_ctx_s run_ctx;
 };
 
 static bool
@@ -104,30 +92,6 @@ quit:
 }
 
 static bool
-drop_privileges(uid_t uid, gid_t gid)
-{
-	if((uid != (uid_t)-1 || gid != (gid_t)-1) && setgroups(0, NULL) == -1)
-	{
-		perror("setgroups(0, NULL) failed");
-		return false;
-	}
-
-	if(gid != (gid_t)-1 && setgid(gid) == -1)
-	{
-		perror("setgid() failed");
-		return false;
-	}
-
-	if(uid != (uid_t)-1 && setuid(uid) == -1)
-	{
-		perror("setuid() failed");
-		return false;
-	}
-
-	return true;
-}
-
-static bool
 make_mount_readonly(const char* path)
 {
 	return mount(NULL, path, NULL, MS_REMOUNT | MS_BIND | MS_RDONLY, NULL) == 0;
@@ -141,7 +105,7 @@ sandbox_entry(void* arg)
 	const struct sandbox_cfg_s* sandbox_cfg = arg;
 	char* old_root_path = NULL;
 
-	if(prctl(PR_SET_PDEATHSIG, SIGHUP) == -1)
+	if(prctl(PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0) == -1)
 	{
 		perror("Could not set parent death signal");
 		quit(EXIT_FAILURE);
@@ -235,26 +199,8 @@ sandbox_entry(void* arg)
 		quit(EXIT_FAILURE);
 	}
 
-	if(!drop_privileges(sandbox_cfg->uid, sandbox_cfg->gid))
+	if(!execute_run_ctx(&sandbox_cfg->run_ctx))
 	{
-		quit(EXIT_FAILURE);
-	}
-
-	if(sandbox_cfg->lock_privs && prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) == -1)
-	{
-		perror("Could not lock privileges");
-		quit(EXIT_FAILURE);
-	}
-
-	if(sandbox_cfg->work_dir != NULL && chdir(sandbox_cfg->work_dir) == -1)
-	{
-		perror("chdir() failed");
-		quit(EXIT_FAILURE);
-	}
-
-	if(execve(sandbox_cfg->command[0], sandbox_cfg->command, sandbox_cfg->env) == -1)
-	{
-		perror("execve() failed");
 		quit(EXIT_FAILURE);
 	}
 
@@ -262,14 +208,6 @@ quit:
 	free(old_root_path);
 
 	return exit_code;
-}
-
-static bool
-strtonum(const char* str, long* number)
-{
-	char* end;
-	*number = strtol(str, &end, 10);
-	return *end == '\0';
 }
 
 int
@@ -283,12 +221,8 @@ main(int argc, char* argv[])
 		{"help", 'h', OPTPARSE_NONE},
 		{"mount", 'm', OPTPARSE_REQUIRED},
 		{"read-only", 'R', OPTPARSE_NONE},
-		{"user", 'u', OPTPARSE_REQUIRED},
-		{"group", 'g', OPTPARSE_REQUIRED},
-		{"lock-privs", 'L', OPTPARSE_NONE},
-		{"chdir", 'c', OPTPARSE_REQUIRED},
-		{"env", 'e', OPTPARSE_REQUIRED},
 		{"pid-file", 'p', OPTPARSE_REQUIRED},
+		RUN_CTX_OPTS,
 		{0}
 	};
 
@@ -296,30 +230,21 @@ main(int argc, char* argv[])
 		NULL, "Print this message",
 		"HOST:SANDBOX[:ro/rw]", "Bind mount a file to sandbox",
 		NULL, "Make sandbox filesystem read-only",
-		"USER", "Run as this user",
-		"GROUP", "Run as this group",
-		NULL, "Prevent sandbox from gaining more privileges",
-		"DIR", "Change to this directory inside sandbox",
-		"ENV=VAL", "Set environment variable inside sandbox",
 		"FILE", "Write pid of sandbox to this file",
+		RUN_CTX_HELP,
 	};
 
 	const char* usage = "Usage: " PROG_NAME " [options] <target> [--] [command] [args]";
 
 	int option;
-	long num;
 	char* child_stack = NULL;
 	const char* pid_file = NULL;
 	unsigned int num_mounts = 0;
-	unsigned int num_envars = 0;
 	struct optparse options;
 	struct sandbox_cfg_s sandbox_cfg = {
-		.command = calloc(argc, sizeof(const char*)),
 		.mounts = calloc(argc / 2, sizeof(struct bindmnt_s)),
-		.env = calloc(argc / 2, sizeof(const char*)),
-		.uid = (uid_t)-1,
-		.gid = (gid_t)-1,
 	};
+	init_run_ctx(&sandbox_cfg.run_ctx, argc);
 	optparse_init(&options, argv);
 
 	while((option = optparse_long(&options, opts, NULL)) != -1)
@@ -342,55 +267,16 @@ main(int argc, char* argv[])
 			case 'R':
 				sandbox_cfg.readonly = true;
 				break;
-			case 'L':
-				sandbox_cfg.lock_privs = true;
-				break;
-			case 'u':
-				if(strtonum(options.optarg, &num) && num >= 0)
-				{
-					sandbox_cfg.uid = (uid_t)num;
-				}
-				else
-				{
-					struct passwd* pwd = getpwnam(options.optarg);
-					if(pwd != NULL)
-					{
-						sandbox_cfg.uid = pwd->pw_uid;
-					}
-					else
-					{
-						fprintf(stderr, PROG_NAME ": invalid user: %s\n", options.optarg);
-						quit(EXIT_FAILURE);
-					}
-				}
-				break;
-			case 'g':
-				if(strtonum(options.optarg, &num) && num >= 0)
-				{
-					sandbox_cfg.gid = (gid_t)num;
-				}
-				else
-				{
-					struct group* grp = getgrnam(options.optarg);
-					if(grp != NULL)
-					{
-						sandbox_cfg.gid = grp->gr_gid;
-					}
-					else
-					{
-						fprintf(stderr, PROG_NAME ": invalid group: %s\n", options.optarg);
-						quit(EXIT_FAILURE);
-					}
-				}
-				break;
-			case 'e':
-				sandbox_cfg.env[num_envars++] = options.optarg;
-				break;
-			case 'c':
-				sandbox_cfg.work_dir = options.optarg;
-				break;
 			case 'p':
 				pid_file = options.optarg;
+				break;
+			CASE_RUN_OPT:
+				if(!parse_run_opt(
+					&sandbox_cfg.run_ctx, PROG_NAME, option, options.optarg
+				))
+				{
+					quit(EXIT_FAILURE);
+				}
 				break;
 			case '?':
 				fprintf(stderr, PROG_NAME ": %s\n", options.errmsg);
@@ -403,30 +289,14 @@ main(int argc, char* argv[])
 		}
 	}
 
-	const char* arg;
-	int command_argc = 0;
-    while((arg = optparse_arg(&options)))
-	{
-		if(sandbox_cfg.sandbox_dir == NULL)
-		{
-			sandbox_cfg.sandbox_dir = arg;
-		}
-		else
-		{
-			sandbox_cfg.command[command_argc++] = (char*)arg;
-		}
-	}
+	sandbox_cfg.sandbox_dir = parse_run_command(
+		&sandbox_cfg.run_ctx, &options, "/sbin/init"
+	);
 
 	if(sandbox_cfg.sandbox_dir == NULL)
 	{
 		fprintf(stderr, PROG_NAME ": must provide sandbox dir\n");
 		quit(EXIT_FAILURE);
-	}
-
-	if(command_argc == 0)
-	{
-		sandbox_cfg.command[0] = "/bin/sh";
-		sandbox_cfg.command[1] = NULL;
 	}
 
 	// Create a child process in a new namespace
@@ -446,7 +316,7 @@ main(int argc, char* argv[])
 		quit(EXIT_FAILURE);
 	}
 
-	if(!drop_privileges(sandbox_cfg.uid, sandbox_cfg.gid))
+	if(!drop_privileges(sandbox_cfg.run_ctx.uid, sandbox_cfg.run_ctx.gid))
 	{
 		quit(EXIT_FAILURE);
 	}
@@ -482,8 +352,7 @@ quit:
 		free(sandbox_cfg.mounts[i].sandbox_path);
 	}
 	free(sandbox_cfg.mounts);
-	free(sandbox_cfg.command);
-	free(sandbox_cfg.env);
+	cleanup_run_ctx(&sandbox_cfg.run_ctx);
 	free(child_stack);
 
 	return exit_code;
