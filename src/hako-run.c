@@ -271,7 +271,7 @@ main(int argc, char* argv[])
 				pid_file = options.optarg;
 				break;
 			CASE_RUN_OPT:
-				if(!parse_run_opt(
+				if(!parse_run_option(
 					&sandbox_cfg.run_ctx, PROG_NAME, option, options.optarg
 				))
 				{

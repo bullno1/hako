@@ -67,7 +67,7 @@ cleanup_run_ctx(struct run_ctx_s* run_ctx)
 }
 
 static bool
-parse_run_opt(
+parse_run_option(
 	struct run_ctx_s* run_ctx,
 	const char* prog_name,
 	char option,
