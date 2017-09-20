@@ -2,5 +2,5 @@ CFLAGS += -Wall -Wextra -pedantic -Wno-missing-field-initializers -Werror -std=c
 
 all: hako-run
 
-hako-run: hako-run.c
-	$(CC) $(CFLAGS) -o hako-run hako-run.c
+hako-run: src/hako-run.c
+	$(CC) $(CFLAGS) -o $@ $<
