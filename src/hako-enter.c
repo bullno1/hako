@@ -163,6 +163,8 @@ main(int argc, char* argv[])
 		}
 		else // parent
 		{
+			if(!drop_privileges(&run_ctx)) { quit(EXIT_FAILURE); }
+
 			int status;
 			errno = 0;
 			while(waitpid(child, &status, 0) != child && errno == EINTR) {}

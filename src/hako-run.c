@@ -316,10 +316,7 @@ main(int argc, char* argv[])
 		quit(EXIT_FAILURE);
 	}
 
-	if(!drop_privileges(sandbox_cfg.run_ctx.uid, sandbox_cfg.run_ctx.gid))
-	{
-		quit(EXIT_FAILURE);
-	}
+	if(!drop_privileges(&sandbox_cfg.run_ctx)) { quit(EXIT_FAILURE); }
 
 	if(pid_file != NULL)
 	{

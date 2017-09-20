@@ -131,8 +131,11 @@ parse_run_option(
 }
 
 static bool
-drop_privileges(uid_t uid, gid_t gid)
+drop_privileges(const struct run_ctx_s* run_ctx)
 {
+	uid_t uid = run_ctx->uid;
+	uid_t gid = run_ctx->gid;
+
 	if((uid != (uid_t)-1 || gid != (gid_t)-1) && setgroups(0, NULL) == -1)
 	{
 		perror("setgroups(0, NULL) failed");
@@ -185,10 +188,7 @@ parse_run_command(
 static bool
 execute_run_ctx(const struct run_ctx_s* run_ctx)
 {
-	if(!drop_privileges(run_ctx->uid, run_ctx->gid))
-	{
-		return false;
-	}
+	if(!drop_privileges(run_ctx)) { return false; }
 
 	if(run_ctx->lock_privs && prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) == -1)
 	{
