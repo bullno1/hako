@@ -3,6 +3,7 @@
 #include <ctype.h>
 #include <signal.h>
 #include <errno.h>
+#include <alloca.h>
 #include <fcntl.h>
 #include <sched.h>
 #include <sys/stat.h>
@@ -237,7 +238,6 @@ main(int argc, char* argv[])
 	const char* usage = "Usage: " PROG_NAME " [options] <target> [--] [command] [args]";
 
 	int option;
-	char* child_stack = NULL;
 	const char* pid_file = NULL;
 	unsigned int num_mounts = 0;
 	struct optparse options;
@@ -300,8 +300,8 @@ main(int argc, char* argv[])
 	}
 
 	// Create a child process in a new namespace
-	long stack_size = sysconf(_SC_PAGESIZE) * 8;
-	child_stack = malloc(stack_size);
+	long stack_size = sysconf(_SC_PAGESIZE);
+	char* child_stack = alloca(stack_size);
 	int clone_flags = 0
 		| SIGCHLD
 		| CLONE_VFORK // wait until child execs away
@@ -375,7 +375,6 @@ quit:
 	}
 	free(sandbox_cfg.mounts);
 	cleanup_run_ctx(&sandbox_cfg.run_ctx);
-	free(child_stack);
 
 	return exit_code;
 }
