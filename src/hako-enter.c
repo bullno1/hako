@@ -72,12 +72,13 @@ enter_sandbox(const char* pid)
 		else
 		{
 			int setns_result = setns(ns, 0);
+			int setns_error = errno;
 			close(ns);
 			if(setns_result == -1)
 			{
 				fprintf(
 					stderr, "Could not setns %s: %s\n",
-					dirent->d_name, strerror(errno)
+					dirent->d_name, strerror(setns_error)
 				);
 				quit(false);
 			}
