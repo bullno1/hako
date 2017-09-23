@@ -4,3 +4,4 @@ mount -o ro,bind $(which busybox) ./bin/busybox
 mount -o ro,bind /etc/passwd ./etc/passwd
 mount -o ro,bind /etc/group ./etc/group
 mount -o ro,bind /tmp ./tmp
+mount -o ro -t tmpfs tmpfs .hako # Hide directory's content
