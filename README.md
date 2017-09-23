@@ -119,3 +119,7 @@ Put this in `.hako/init`: `mount -t tmpfs tmpfs ./tmpfs`.
 ### How to hide .hako content?
 
 Put this in `.hako/init`: `mount -t tmpfs -o ro tmpfs .hako`.
+
+### How to pass arguments to .hako/init?
+
+Use environment variable (e.g: `SOME_INIT_ARGS="some-args" hako-enter sandbox`).
