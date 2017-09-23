@@ -57,7 +57,8 @@ General syntax is: `hako-run [options] <target> [command] [args]`.
 
 If `command` is not given, it will default to `/bin/sh`.
 
-The file `.hako/init`, if present, will be executed to initialize the sandbox.
+The file `.hako/init` must be present and will be executed to initialize the sandbox.
+It can do things like bind mounting files from the host into the sandbox.
 
 Run `hako-run --help` for more info.
 
