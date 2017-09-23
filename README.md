@@ -14,7 +14,8 @@ It is created out of a need for a simple tool like `chroot` but with extra isola
 
 ## What it does not do
 
-- Networking: use docker/runc instead.
+- Networking: use docker/runc instead or setup something with iproute2 and veth.
+  With the `--network` switch, a sandbox can use the host's or another sandbox's network.
   Alternatively, Unix socket works for sandboxes in the same host too.
 - Seccomp: I might start a new project for this if needed.
   Something like `seccomp-exec <rule-file> <command> [args]` would be nice.
@@ -123,3 +124,11 @@ Put this in `.hako/init`: `mount -t tmpfs -o ro tmpfs .hako`.
 ### How to pass arguments to .hako/init?
 
 Use environment variable (e.g: `SOME_INIT_ARGS="some-args" hako-enter sandbox`).
+
+### How to allow a sandbox to use the host's network namespace?
+
+`hako-run --network sandbox`
+
+### How to put a sandbox in another one's network namespace?
+
+`hako-run --network=/proc/$(cat other-sandbox.pid)/net/ns sandbox`

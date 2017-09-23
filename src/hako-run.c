@@ -25,6 +25,8 @@
 struct sandbox_cfg_s
 {
 	const char* sandbox_dir;
+	const char* netns;
+	int netns_flag;
 	struct bindmnt_s* mounts;
 	bool writable;
 	struct run_ctx_s run_ctx;
@@ -37,11 +39,14 @@ sandbox_entry(void* arg)
 
 	const struct sandbox_cfg_s* sandbox_cfg = arg;
 
+	// Die with parent
 	if(prctl(PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0) == -1)
 	{
 		perror("Could not set parent death signal");
 		quit(EXIT_FAILURE);
 	}
+
+	// Prepare sandbox dir
 
 	if(mount(NULL, "/", NULL, MS_PRIVATE | MS_REC, NULL) == -1)
 	{
@@ -64,6 +69,30 @@ sandbox_entry(void* arg)
 		quit(EXIT_FAILURE);
 	}
 
+	// Network
+	if(sandbox_cfg->netns_flag != CLONE_NEWNET && sandbox_cfg->netns != NULL)
+	{
+		int netns = open(sandbox_cfg->netns, O_RDONLY);
+		if(netns < 0)
+		{
+			fprintf(
+				stderr, "Could not access %s: %s\n",
+				sandbox_cfg->netns, strerror(errno)
+			);
+			quit(EXIT_FAILURE);
+		}
+
+		int setns_result = setns(netns, CLONE_NEWNET);
+		int setns_error = errno;
+		close(netns);
+		if(setns_result == -1)
+		{
+			fprintf(stderr, "Could not setns: %s\n", strerror(setns_error));
+			quit(EXIT_FAILURE);
+		}
+	}
+
+	// Execute .hako/init
 	pid_t init_pid = vfork();
 	if(init_pid < 0)
 	{
@@ -103,6 +132,8 @@ sandbox_entry(void* arg)
 		}
 	}
 
+	// Finalize sandbox
+
 	if(!sandbox_cfg->writable
 		&& mount(NULL, ".", NULL, MS_REMOUNT | MS_BIND | MS_RDONLY, NULL) == -1)
 	{
@@ -128,6 +159,7 @@ sandbox_entry(void* arg)
 		quit(EXIT_FAILURE);
 	}
 
+	// Show time
 	if(!execute_run_ctx(&sandbox_cfg->run_ctx))
 	{
 		quit(EXIT_FAILURE);
@@ -147,6 +179,7 @@ main(int argc, char* argv[])
 	struct optparse_long opts[] = {
 		{"help", 'h', OPTPARSE_NONE},
 		{"writable", 'W', OPTPARSE_NONE},
+		{"network", 'N', OPTPARSE_OPTIONAL},
 		{"pid-file", 'p', OPTPARSE_REQUIRED},
 		RUN_CTX_OPTS,
 		{0}
@@ -155,6 +188,7 @@ main(int argc, char* argv[])
 	const char* help[] = {
 		NULL, "Print this message",
 		NULL, "Make sandbox root filesystem writable",
+		"FILE", "Set sandbox's network namespace (default: host)",
 		"FILE", "Write pid of sandbox to this file",
 		RUN_CTX_HELP,
 	};
@@ -164,7 +198,7 @@ main(int argc, char* argv[])
 	int option;
 	const char* pid_file = NULL;
 	struct optparse options;
-	struct sandbox_cfg_s sandbox_cfg = { 0 };
+	struct sandbox_cfg_s sandbox_cfg = { .netns_flag = CLONE_NEWNET };
 	init_run_ctx(&sandbox_cfg.run_ctx, argc);
 	optparse_init(&options, argv);
 	options.permute = 0;
@@ -179,6 +213,10 @@ main(int argc, char* argv[])
 				break;
 			case 'W':
 				sandbox_cfg.writable = true;
+				break;
+			case 'N':
+				sandbox_cfg.netns = options.optarg;
+				sandbox_cfg.netns_flag = 0;
 				break;
 			case 'p':
 				pid_file = options.optarg;
@@ -217,7 +255,7 @@ main(int argc, char* argv[])
 		| SIGCHLD
 		| CLONE_VFORK // wait until child execs away
 		| CLONE_NEWPID | CLONE_NEWIPC | CLONE_NEWNS | CLONE_NEWUTS
-		| CLONE_NEWNET;
+		| sandbox_cfg.netns_flag;
 	pid_t child_pid = clone(
 		sandbox_entry, child_stack + stack_size, clone_flags, &sandbox_cfg
 	);
