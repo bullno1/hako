@@ -10,4 +10,4 @@ exec $HAKO_ENTER \
 	--lock-privs \
 	--fork \
 	$(cat /tmp/hako.pid) \
-	-- "$@"
+	"$@"

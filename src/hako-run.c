@@ -11,7 +11,7 @@
 #include <sys/mount.h>
 #include <sys/syscall.h>
 #define OPTPARSE_IMPLEMENTATION
-#define OPTPARSE_API static
+#define OPTPARSE_API static __attribute__((unused))
 #include "optparse.h"
 #define OPTPARSE_HELP_IMPLEMENTATION
 #define OPTPARSE_HELP_API static
@@ -159,7 +159,7 @@ main(int argc, char* argv[])
 		RUN_CTX_HELP,
 	};
 
-	const char* usage = "Usage: " PROG_NAME " [options] <target> [--] [command] [args]";
+	const char* usage = "Usage: " PROG_NAME " [options] <target> [command] [args]";
 
 	int option;
 	const char* pid_file = NULL;
@@ -167,6 +167,7 @@ main(int argc, char* argv[])
 	struct sandbox_cfg_s sandbox_cfg = { 0 };
 	init_run_ctx(&sandbox_cfg.run_ctx, argc);
 	optparse_init(&options, argv);
+	options.permute = 0;
 
 	while((option = optparse_long(&options, opts, NULL)) != -1)
 	{
@@ -201,9 +202,7 @@ main(int argc, char* argv[])
 		}
 	}
 
-	sandbox_cfg.sandbox_dir = parse_run_command(
-		&sandbox_cfg.run_ctx, &options, "/sbin/init"
-	);
+	sandbox_cfg.sandbox_dir = parse_run_command(&sandbox_cfg.run_ctx, &options);
 
 	if(sandbox_cfg.sandbox_dir == NULL)
 	{

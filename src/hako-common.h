@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <unistd.h>
+#include <errno.h>
+#include <string.h>
 #include <grp.h>
 #include <pwd.h>
 #include <sys/types.h>
@@ -38,6 +40,7 @@ struct run_ctx_s
 	unsigned int env_len;
 	char** env;
 	char** command;
+	char* default_cmd[2];
 };
 
 static bool
@@ -54,15 +57,13 @@ init_run_ctx(struct run_ctx_s* run_ctx, int argc)
 	*run_ctx = (struct run_ctx_s){
 		.uid = (uid_t)-1,
 		.gid = (gid_t)-1,
-		.env = calloc(argc / 2, sizeof(char*)),
-		.command = calloc(argc, sizeof(char*))
+		.env = calloc(argc / 2, sizeof(char*))
 	};
 }
 
 static void
 cleanup_run_ctx(struct run_ctx_s* run_ctx)
 {
-	free(run_ctx->command);
 	free(run_ctx->env);
 }
 
@@ -158,28 +159,18 @@ drop_privileges(const struct run_ctx_s* run_ctx)
 }
 
 static const char*
-parse_run_command(
-	struct run_ctx_s* run_ctx, struct optparse* options, char* default_cmd
-)
+parse_run_command(struct run_ctx_s* run_ctx, struct optparse* options)
 {
-	int command_argc = 0;
-	const char* target = NULL;
-	const char* arg;
-    while((arg = optparse_arg(options)))
+	const char* target = options->argv[options->optind];
+	if(target != NULL && options->argv[options->optind + 1] != NULL)
 	{
-		if(target == NULL)
-		{
-			target = arg;
-		}
-		else
-		{
-			run_ctx->command[command_argc++] = (char*)arg;
-		}
+		run_ctx->command = &options->argv[options->optind + 1];
 	}
-
-	if(command_argc == 0)
+	else
 	{
-		run_ctx->command[0] = default_cmd;
+		run_ctx->default_cmd[0] = "/bin/sh";
+		run_ctx->default_cmd[1] = NULL;
+		run_ctx->command = run_ctx->default_cmd;
 	}
 
 	return target;
@@ -204,7 +195,10 @@ execute_run_ctx(const struct run_ctx_s* run_ctx)
 
 	if(execve(run_ctx->command[0], run_ctx->command, run_ctx->env) == -1)
 	{
-		perror("execve() failed");
+		fprintf(
+			stderr, "execve(\"%s\") failed: %s\n",
+			run_ctx->command[0], strerror(errno)
+		);
 		return false;
 	}
 

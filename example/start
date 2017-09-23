@@ -14,4 +14,4 @@ exec $HAKO_RUN \
 	--lock-privs \
 	--read-only \
 	${SANDBOXDIR} \
-	-- "$@"
+	"$@"

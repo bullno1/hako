@@ -12,7 +12,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #define OPTPARSE_IMPLEMENTATION
-#define OPTPARSE_API static
+#define OPTPARSE_API static __attribute__((unused))
 #include "optparse.h"
 #define OPTPARSE_HELP_IMPLEMENTATION
 #define OPTPARSE_HELP_API static
@@ -108,7 +108,7 @@ main(int argc, char* argv[])
 		RUN_CTX_HELP,
 	};
 
-	const char* usage = "Usage: " PROG_NAME " [options] <pid> [--] [command] [args]";
+	const char* usage = "Usage: " PROG_NAME " [options] <pid> [command] [args]";
 
 	int option;
 	bool fork_before_exec = false;
@@ -117,6 +117,7 @@ main(int argc, char* argv[])
 
 	init_run_ctx(&run_ctx, argc);
 	optparse_init(&options, argv);
+	options.permute = 0;
 
 	while((option = optparse_long(&options, opts, NULL)) != -1)
 	{
@@ -146,7 +147,7 @@ main(int argc, char* argv[])
 		}
 	}
 
-	const char* pid = parse_run_command(&run_ctx, &options, "/bin/sh");
+	const char* pid = parse_run_command(&run_ctx, &options);
 
 	if(pid == NULL)
 	{
