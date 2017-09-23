@@ -9,7 +9,6 @@ It is created out of a need for a simple tool like `chroot` but with extra isola
 ## What it does
 
 - It generally works like `chroot` with the added benefit of isolation using Linux namespace.
-- It can bind mount files from outside the sandbox and clean up on termination.
 - It can run on a read-only filesystem.
 - Some rudimentary form of privilege dropping through setuid, setgid and [`PR_SET_NO_NEW_PRIVS`](https://www.kernel.org/doc/Documentation/prctl/no_new_privs.txt).
 
@@ -32,21 +31,33 @@ It is created out of a need for a simple tool like `chroot` but with extra isola
 
 ```sh
 mkdir sandbox
-mkdir sandbox/.hako # Must be present for hako-run
+mkdir sandbox/.hako
+touch sandbox/.hako/init
+chmod +x sandbox/.hako/init
 mkdir sandbox/bin
 touch sandbox/bin/busybox
 ln -s busybox sandbox/bin/sh
 ```
 
+Content of `.hako/init`:
+
+```sh
+#!/bin/sh -e
+
+mount -o ro,bind $(which busybox) ./bin/busybox
+```
+
 Run it with:
 
 ```sh
-hako-run --mount $(which busybox):/bin/busybox:ro sandbox /bin/sh
+hako-run sandbox /bin/sh
 ```
 
-General syntax is: `hako-run [options] <target> [--] [command] [args]`.
+General syntax is: `hako-run [options] <target> [command] [args]`.
 
-If `command` is not given, it will default to `/sbin/init`.
+If `command` is not given, it will default to `/bin/sh`.
+
+The file `.hako/init`, if present, will be executed to initialize the sandbox.
 
 Run `hako-run --help` for more info.
 
@@ -64,7 +75,7 @@ One can enter the sandbox with:
 hako-enter --fork $(cat sandbox.pid) /bin/sh
 ```
 
-General syntax is: `hako-enter [options] <pid> [--] [command] [args]`.
+General syntax is: `hako-enter [options] <pid> [command] [args]`.
 
 If `command` is not given, it will default to `/bin/sh`.
 
@@ -99,3 +110,11 @@ It also provides access to the old root filesystem while creating the sandbox.
 ### How to build with musl?
 
 `CC='musl-gcc -static' make`
+
+### How to use tmpfs in the container?
+
+Put this in `.hako/init`: `mount -t tmpfs tmpfs ./tmpfs`.
+
+### How to hide .hako content?
+
+Put this in `.hako/init`: `mount -t tmpfs -o ro tmpfs .hako`.
