@@ -26,7 +26,7 @@ struct sandbox_cfg_s
 {
 	const char* sandbox_dir;
 	struct bindmnt_s* mounts;
-	bool readonly;
+	bool writable;
 	struct run_ctx_s run_ctx;
 };
 
@@ -103,7 +103,7 @@ sandbox_entry(void* arg)
 		}
 	}
 
-	if(sandbox_cfg->readonly
+	if(!sandbox_cfg->writable
 		&& mount(NULL, ".", NULL, MS_REMOUNT | MS_BIND | MS_RDONLY, NULL) == -1)
 	{
 		perror("Could not make sandbox read-only");
@@ -146,7 +146,7 @@ main(int argc, char* argv[])
 
 	struct optparse_long opts[] = {
 		{"help", 'h', OPTPARSE_NONE},
-		{"read-only", 'R', OPTPARSE_NONE},
+		{"writable", 'W', OPTPARSE_NONE},
 		{"pid-file", 'p', OPTPARSE_REQUIRED},
 		RUN_CTX_OPTS,
 		{0}
@@ -154,7 +154,7 @@ main(int argc, char* argv[])
 
 	const char* help[] = {
 		NULL, "Print this message",
-		NULL, "Make sandbox filesystem read-only",
+		NULL, "Make sandbox root filesystem writable",
 		"FILE", "Write pid of sandbox to this file",
 		RUN_CTX_HELP,
 	};
@@ -177,8 +177,8 @@ main(int argc, char* argv[])
 				optparse_help(usage, opts, help);
 				quit(EXIT_SUCCESS);
 				break;
-			case 'R':
-				sandbox_cfg.readonly = true;
+			case 'W':
+				sandbox_cfg.writable = true;
 				break;
 			case 'p':
 				pid_file = options.optarg;
