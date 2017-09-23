@@ -8,10 +8,6 @@ HAKO_RUN="$(dirname ${DIRNAME})/hako-run"
 mkdir -p ${SANDBOXDIR}/tmp ${SANDBOXDIR}/.hako
 
 exec $HAKO_RUN \
-	--mount $(which busybox):/bin/busybox:ro \
-	--mount /etc/passwd:/etc/passwd:ro \
-	--mount /etc/group:/etc/group:ro \
-	--mount /tmp:/tmp \
 	--pid-file /tmp/hako.pid \
 	--user ${SUDO_UID:-$(id -u)} \
 	--group ${SUDO_GID:-$(id -g)} \

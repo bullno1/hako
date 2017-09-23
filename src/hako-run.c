@@ -22,13 +22,6 @@
 #define PROG_NAME "hako-run"
 #define quit(code) exit_code = code; goto quit;
 
-struct bindmnt_s
-{
-	char* host_path;
-	char* sandbox_path;
-	bool readonly;
-};
-
 struct sandbox_cfg_s
 {
 	const char* sandbox_dir;
@@ -37,74 +30,12 @@ struct sandbox_cfg_s
 	struct run_ctx_s run_ctx;
 };
 
-static bool
-parse_mount(const char* mount_spec_, struct bindmnt_s* mount_cfg)
-{
-	bool exit_code = true;
-	char* saveptr = NULL;
-	char* mount_spec = strdup(mount_spec_);
-	unsigned int i;
-	char* token;
-
-	memset(mount_cfg, 0, sizeof(*mount_cfg));
-	for(
-		i = 0, token = strtok_r(mount_spec, ":", &saveptr);
-		token != NULL;
-		token = strtok_r(NULL, ":", &saveptr), ++i
-	)
-	{
-		switch(i)
-		{
-			case 0:
-				mount_cfg->host_path = strdup(token);
-				break;
-			case 1:
-				mount_cfg->sandbox_path = strdup(token);
-				break;
-			case 2:
-				if(strcmp(token, "ro") == 0)
-				{
-					mount_cfg->readonly = true;
-				}
-				else if(strcmp(token, "rw") == 0)
-				{
-					mount_cfg->readonly = false;
-				}
-				else
-				{
-					quit(false);
-				}
-				break;
-			default:
-				quit(false);
-				break;
-		}
-	}
-
-	if(mount_cfg->host_path == NULL || mount_cfg->sandbox_path == NULL)
-	{
-		quit(false);
-	}
-
-quit:
-	free(mount_spec);
-
-	return exit_code;
-}
-
-static bool
-make_mount_readonly(const char* path)
-{
-	return mount(NULL, path, NULL, MS_REMOUNT | MS_BIND | MS_RDONLY, NULL) == 0;
-}
-
 static int
 sandbox_entry(void* arg)
 {
 	int exit_code = EXIT_SUCCESS;
 
 	const struct sandbox_cfg_s* sandbox_cfg = arg;
-	char* old_root_path = NULL;
 
 	if(prctl(PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0) == -1)
 	{
@@ -127,21 +58,59 @@ sandbox_entry(void* arg)
 		quit(EXIT_FAILURE);
 	}
 
-	if(sandbox_cfg->readonly && !make_mount_readonly(sandbox_cfg->sandbox_dir))
+	if(chdir(sandbox_cfg->sandbox_dir) == -1)
+	{
+		perror("Could not chdir into sandbox");
+		quit(EXIT_FAILURE);
+	}
+
+	pid_t init_pid = vfork();
+	if(init_pid < 0)
+	{
+		perror("vfork() failed");
+		quit(EXIT_FAILURE);
+	}
+	else if(init_pid == 0) // child
+	{
+		if(prctl(PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0) == -1)
+		{
+			perror("Could not set parent death signal");
+			quit(EXIT_FAILURE);
+		}
+
+		char* init_cmd[] = { HAKO_DIR "/init", NULL };
+		if(execv(init_cmd[0], init_cmd) == -1)
+		{
+			perror("Could not execute " HAKO_DIR "/init");
+			quit(EXIT_FAILURE);
+		}
+	}
+	else // parent
+	{
+		int init_status;
+		errno = 0;
+		while(waitpid(init_pid, &init_status, 0) != init_pid && errno == EINTR)
+		{ }
+
+		if(!WIFEXITED(init_status) || WEXITSTATUS(init_status) != 0)
+		{
+			fprintf(
+				stderr, HAKO_DIR "/init failed with %s: %d\n",
+				WIFEXITED(init_status) ? "status" : "signal",
+				WIFEXITED(init_status) ? WEXITSTATUS(init_status) : WTERMSIG(init_status)
+			);
+			quit(EXIT_FAILURE);
+		}
+	}
+
+	if(sandbox_cfg->readonly
+		&& mount(NULL, ".", NULL, MS_REMOUNT | MS_BIND | MS_RDONLY, NULL) == -1)
 	{
 		perror("Could not make sandbox read-only");
 		quit(EXIT_FAILURE);
 	}
 
-	if(asprintf(
-		&old_root_path, "%s/" HAKO_DIR, sandbox_cfg->sandbox_dir
-	) == -1)
-	{
-		perror(NULL);
-		quit(EXIT_FAILURE);
-	}
-
-	if(syscall(__NR_pivot_root, sandbox_cfg->sandbox_dir, old_root_path) == -1)
+	if(syscall(__NR_pivot_root, ".", HAKO_DIR) == -1)
 	{
 		perror("Could not pivot root");
 		quit(EXIT_FAILURE);
@@ -151,47 +120,6 @@ sandbox_entry(void* arg)
 	{
 		perror("Could not chdir into new root");
 		quit(EXIT_FAILURE);
-	}
-
-	struct bindmnt_s* mount_cfg;
-	unsigned int i;
-	for(
-		i = 0, mount_cfg = &sandbox_cfg->mounts[i];
-		mount_cfg->sandbox_path != NULL;
-		++i, mount_cfg = &sandbox_cfg->mounts[i])
-	{
-		char* new_host_path = NULL;
-
-		if(asprintf(
-			&new_host_path, HAKO_DIR "/%s", mount_cfg->host_path
-		) == -1)
-		{
-			perror(NULL);
-			quit(EXIT_FAILURE);
-		}
-
-		int mount_result = mount(
-			new_host_path, mount_cfg->sandbox_path, NULL, MS_BIND | MS_REC, NULL
-		);
-		free(new_host_path);
-
-		if(mount_result == -1)
-		{
-			fprintf(
-				stderr, "Could not mount %s to %s: %s\n",
-				mount_cfg->host_path, mount_cfg->sandbox_path, strerror(errno)
-			);
-			quit(EXIT_FAILURE);
-		}
-
-		if(mount_cfg->readonly && !make_mount_readonly(mount_cfg->sandbox_path))
-		{
-			fprintf(
-				stderr, "Could not make %s read-only: %s\n",
-				mount_cfg->sandbox_path, strerror(errno)
-			);
-			quit(EXIT_FAILURE);
-		}
 	}
 
 	if(umount2(HAKO_DIR, MNT_DETACH) == -1)
@@ -206,8 +134,6 @@ sandbox_entry(void* arg)
 	}
 
 quit:
-	free(old_root_path);
-
 	return exit_code;
 }
 
@@ -220,7 +146,6 @@ main(int argc, char* argv[])
 
 	struct optparse_long opts[] = {
 		{"help", 'h', OPTPARSE_NONE},
-		{"mount", 'm', OPTPARSE_REQUIRED},
 		{"read-only", 'R', OPTPARSE_NONE},
 		{"pid-file", 'p', OPTPARSE_REQUIRED},
 		RUN_CTX_OPTS,
@@ -229,7 +154,6 @@ main(int argc, char* argv[])
 
 	const char* help[] = {
 		NULL, "Print this message",
-		"HOST:SANDBOX[:ro/rw]", "Bind mount a file to sandbox",
 		NULL, "Make sandbox filesystem read-only",
 		"FILE", "Write pid of sandbox to this file",
 		RUN_CTX_HELP,
@@ -239,11 +163,8 @@ main(int argc, char* argv[])
 
 	int option;
 	const char* pid_file = NULL;
-	unsigned int num_mounts = 0;
 	struct optparse options;
-	struct sandbox_cfg_s sandbox_cfg = {
-		.mounts = calloc(argc / 2, sizeof(struct bindmnt_s)),
-	};
+	struct sandbox_cfg_s sandbox_cfg = { 0 };
 	init_run_ctx(&sandbox_cfg.run_ctx, argc);
 	optparse_init(&options, argv);
 
@@ -254,15 +175,6 @@ main(int argc, char* argv[])
 			case 'h':
 				optparse_help(usage, opts, help);
 				quit(EXIT_SUCCESS);
-				break;
-			case 'm':
-				if(!parse_mount(
-					options.optarg, &sandbox_cfg.mounts[num_mounts++]
-				))
-				{
-					fprintf(stderr, PROG_NAME ": invalid mount: %s\n", options.optarg);
-					quit(EXIT_FAILURE);
-				}
 				break;
 			case 'R':
 				sandbox_cfg.readonly = true;
@@ -367,12 +279,6 @@ main(int argc, char* argv[])
 	}
 
 quit:
-	for(size_t i = 0; i < num_mounts; ++i)
-	{
-		free(sandbox_cfg.mounts[i].host_path);
-		free(sandbox_cfg.mounts[i].sandbox_path);
-	}
-	free(sandbox_cfg.mounts);
 	cleanup_run_ctx(&sandbox_cfg.run_ctx);
 
 	return exit_code;
