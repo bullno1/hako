@@ -7,7 +7,6 @@ HAKO_ENTER="$(dirname ${DIRNAME})/hako-enter"
 exec $HAKO_ENTER \
 	--user ${SUDO_UID:-$(id -u)} \
 	--group ${SUDO_GID:-$(id -g)} \
-	--lock-privs \
 	--fork \
 	$(cat /tmp/hako.pid) \
 	"$@"

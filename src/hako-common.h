@@ -16,26 +16,26 @@
 #include <sys/prctl.h>
 #include "optparse.h"
 
-#define CASE_RUN_OPT case 'L': case 'u': case 'g': case 'e': case 'c'
+#define CASE_RUN_OPT case 'P': case 'u': case 'g': case 'e': case 'c'
 #define RUN_CTX_OPTS \
 	{"env", 'e', OPTPARSE_REQUIRED}, \
 	{"user", 'u', OPTPARSE_REQUIRED}, \
 	{"group", 'g', OPTPARSE_REQUIRED}, \
-	{"lock-privs", 'L', OPTPARSE_NONE}, \
+	{"allow-new-privs", 'P', OPTPARSE_NONE}, \
 	{"chdir", 'c', OPTPARSE_REQUIRED}
 
 #define RUN_CTX_HELP \
 	"NAME=VALUE", "Set environment variable inside sandbox", \
 	"USER", "Run as this user", \
 	"GROUP", "Run as this group", \
-	NULL, "Prevent further privilege escalation", \
+	NULL, "Allow gaining new privileges", \
 	"DIR", "Change to this directory inside sandbox"
 
 struct run_ctx_s
 {
 	uid_t uid;
 	gid_t gid;
-	bool lock_privs;
+	bool allow_new_privs;
 	const char* work_dir;
 	unsigned int env_len;
 	char** env;
@@ -78,8 +78,8 @@ parse_run_option(
 	long num;
 	switch(option)
 	{
-		case 'L':
-			run_ctx->lock_privs = true;
+		case 'P':
+			run_ctx->allow_new_privs = true;
 			return true;
 		case 'u':
 			if(strtonum(optarg, &num) && num >= 0)
@@ -181,7 +181,7 @@ execute_run_ctx(const struct run_ctx_s* run_ctx)
 {
 	if(!drop_privileges(run_ctx)) { return false; }
 
-	if(run_ctx->lock_privs && prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) == -1)
+	if(!run_ctx->allow_new_privs && prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) == -1)
 	{
 		perror("Could not lock privileges");
 		return false;

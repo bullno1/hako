@@ -11,7 +11,6 @@ exec $HAKO_RUN \
 	--pid-file /tmp/hako.pid \
 	--user ${SUDO_UID:-$(id -u)} \
 	--group ${SUDO_GID:-$(id -g)} \
-	--lock-privs \
 	--read-only \
 	${SANDBOXDIR} \
 	"$@"
