@@ -27,7 +27,6 @@
 	"NAME=VALUE", "Set environment variable inside sandbox", \
 	"USER", "Run as this user", \
 	"GROUP", "Run as this group", \
-	NULL, "Allow gaining new privileges", \
 	"DIR", "Change to this directory inside sandbox"
 
 struct run_ctx_s
