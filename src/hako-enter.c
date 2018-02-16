@@ -80,7 +80,12 @@ enter_sandbox(const char* pid)
 					stderr, "Could not setns %s: %s\n",
 					dirent->d_name, strerror(setns_error)
 				);
-				quit(false);
+
+				if(!(strcmp(dirent->d_name, "user") == 0
+					|| strcmp(dirent->d_name, "net") == 0))
+				{
+					quit(false);
+				}
 			}
 		}
 	}
